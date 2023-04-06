@@ -17,7 +17,7 @@ fn main() {
             .expect("Error setting Ctrl-C handler");
     }
 
-    let mut programs: HashMap<i32, Vec<i32>> = HashMap::new();
+    let mut programs: HashMap<i32, i32> = HashMap::new();
 
     while run.load(Ordering::SeqCst) {
         let mut current_fd_open = 0;
@@ -28,21 +28,31 @@ fn main() {
                 if let Ok(process_id) = proc_dir.file_name().to_string_lossy().parse::<i32>() {
                     let fd_path = format!("{}/fd/", proc_dir.path().to_string_lossy());
                     if let Ok(fd_dir) = fs::read_dir(fd_path.clone()) {
-                        let fd_count = fd_dir.count() as i32;
-                        current_fd_open += fd_count;
+                        let current_fd_count = fd_dir.count() as i32;
+                        current_fd_open += current_fd_count;
                         programs
                             .entry(process_id)
-                            .and_modify(|fd_counts| fd_counts.push(fd_count))
-                            .or_insert(vec![fd_count]);
+                            .and_modify(|fd_counts| {
+                                if current_fd_count > *fd_counts {
+                                    println!(
+                                        "PID {} has increased FD by: {}",
+                                        process_id,
+                                        current_fd_count - *fd_counts
+                                    );
+                                }
+                            })
+                            .or_insert(current_fd_count);
                     }
                 }
             }
         }
-        println!("Current FD open: {current_fd_open}");
-        std::thread::sleep(Duration::from_millis(500));
+        println!("Current All Open: {current_fd_open}");
+
+        println!("");
+        std::thread::sleep(Duration::from_secs(2));
     }
 
-    let mut file = File::create("test.csv").unwrap();
+    /*let mut file = File::create("test.csv").unwrap();
     for (id, descriptors) in programs.iter() {
         let data = id.to_string()
             + ","
@@ -53,7 +63,7 @@ fn main() {
 
         file.write_all(data.as_bytes()).unwrap();
         file.write_all(b"\n").unwrap();
-    }
+    }*/
 
-    println!("{programs:?}");
+    //println!("{programs:?}");
 }
